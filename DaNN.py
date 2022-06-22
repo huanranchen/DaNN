@@ -31,22 +31,25 @@ class ReverseLayerF(Function):
 class Model(nn.Module):
     def __init__(self):
         super(Model, self).__init__()
-        from torchvision import models
-        self.model = models.resnet50(num_classes=60)
+        from pyramidnet import pyramidnet272
+        self.model = pyramidnet272(num_classes=60)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print('densenet' * 100)
 
         self.domain_classifier = nn.Sequential(
-            nn.Linear(864, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-            nn.Linear(256, 6),
+            nn.Linear(864, 6),
         )
 
         self.feature = nn.ModuleList(list((self.model.children()))[:-1])
-        self.classifier = list(self.model.children())[-1]
+        # self.classifier = list(self.model.children())[-1]
+        self.classifier = nn.Sequential(
+            nn.Linear(864, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Linear(256, 60),
+        )
 
-    def forward(self, x, alpha=5):
+    def forward(self, x, alpha=1):
         for m in self.feature:
             x = m(x)
         x = x.reshape(-1, 864)
@@ -67,15 +70,23 @@ class Model(nn.Module):
             self.domain_classifier.load_state_dict(start_state)
             print('using loaded domain_classifier')
             print('-' * 100)
+            
+        if os.path.exists('classifier.pth'):
+            start_state = torch.load('classifier.pth', map_location=self.device)
+            self.domain_classifier.load_state_dict(start_state)
+            print('using loaded classifier')
+            print('-' * 100)
 
     def save_model(self):
         result = self.model.state_dict()
         torch.save(result, 'model.pth')
         result = self.domain_classifier.state_dict()
         torch.save(result, 'domain_classifier.pth')
+        result = self.classifier.state_dict()
+        torch.save(result, 'classifier.pth')
 
 
-class Solver():
+class NoisyStudent():
     def __init__(self,
                  batch_size=64,
                  lr=1e-3,
@@ -142,7 +153,7 @@ class Solver():
               total_epoch=3,
               label_smoothing=0.2,
               fp16=True,
-              lam=0.2,
+              lam = 0.2,
               ):
         from CutMix import cutmix
         from torch.cuda.amp import autocast, GradScaler
@@ -152,9 +163,9 @@ class Solver():
         criterion = nn.CrossEntropyLoss().to(self.device)
         for epoch in range(1, total_epoch + 1):
             #             # first, predict
-            #             self.predict()
-            #             self.save_result()
-
+#             self.predict()
+#             self.save_result()
+            
             self.model.train()
             prev_loss = train_loss
             train_loss = 0
@@ -245,5 +256,5 @@ if __name__ == '__main__':
     total_epoch = int(args.total_epoch)
     lr = float(args.lr)
     lam = args.lam
-    x = Solver(batch_size=batch_size, lr=lr)
+    x = NoisyStudent(batch_size=batch_size, lr=lr)
     x.train(total_epoch=total_epoch, lam=lam)
