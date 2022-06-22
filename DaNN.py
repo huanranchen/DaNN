@@ -75,7 +75,7 @@ class Model(nn.Module):
         torch.save(result, 'domain_classifier.pth')
 
 
-class NoisyStudent():
+class Solver():
     def __init__(self,
                  batch_size=64,
                  lr=1e-3,
@@ -245,5 +245,5 @@ if __name__ == '__main__':
     total_epoch = int(args.total_epoch)
     lr = float(args.lr)
     lam = args.lam
-    x = NoisyStudent(batch_size=batch_size, lr=lr)
+    x = Solver(batch_size=batch_size, lr=lr)
     x.train(total_epoch=total_epoch, lam=lam)
